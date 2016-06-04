@@ -173,18 +173,19 @@ def process_traffic(d, dist_dict):
 	dic = {}
 	for file in traffic_files:
 		f = open(d + file, "r")
-		line = f.readline()
-		fields = line.split("\t")
-		district = dist_dict[fields[0]]
-		congestion1 = int(fields[1].split(":")[1])
-		congestion2 = int(fields[2].split(":")[1])
-		congestion3 = int(fields[3].split(":")[1])
-		congestion4 = int(fields[4].split(":")[1])
-		dt = fields[5].split("\r")[0].split(" ")
-		day = day_in_year(dt[0])
-		timeslot = get_timeslot(dt[1])
-		key = district + ":" + str(day) + ":" + timeslot
-		dic[key] = (congestion1, congestion2, congestion3, congestion4)
+		for line in f:
+			fields = line.split("\t")
+			district = dist_dict[fields[0]]
+			congestion1 = int(fields[1].split(":")[1])
+			congestion2 = int(fields[2].split(":")[1])
+			congestion3 = int(fields[3].split(":")[1])
+			congestion4 = int(fields[4].split(":")[1])
+			dt = fields[5].split("\r")[0].split(" ")
+			day = day_in_year(dt[0])
+			timeslot = get_timeslot(dt[1])
+			key = district + ":" + str(day) + ":" + timeslot
+			dic[key] = (congestion1, congestion2, congestion3, congestion4)
+		f.close()
 	return dic
 
 def process_weather(wdir):
@@ -209,6 +210,7 @@ def process_weather(wdir):
 			# create key (day:timeslot)
 			key = str(day) + ":" + timeslot
 			dic[key] = (weather, temp, pollution)
+		f.close()
 	return dic
 
 def get_poi(file, dist_dict):

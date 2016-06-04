@@ -67,47 +67,80 @@ else:
 
 
 # create training file
+missing_label_cnt = 0	# count of missing labels from nest timeslot
+record_count = 0
 next_ts = 0;
 train = {}
 cnt = 0
 for k in gap_dict:
-	if cnt > 100:
-		break
 	district = k[0]; day_of_year = k[1]; timeslot = k[2]
 	demand, supply, into_dist, out_of_dist, day_of_week = gap_dict[k]
 	train[k] = {"district": k[0], 'day_of_year': k[1], "timeslot": k[2],
-				"demand": demand, "supply": supply, "into_district": into_dist,
-				"out_of_district": out_of_district, "day_of_week": day_of_week }
+				"gap": demand - supply, "demand": demand, "supply": supply, "into_district": into_dist,
+				"out_of_district": out_of_dist, "day_of_week": day_of_week }
 
-	next_ts = (timeslot + 1) % 145
-	prior_ts = (timeslot - 1) % 145
-	penult_ts  = (timeslot - 2) % 145
+	next_ts = (int(timeslot) + 1) % 145
+	prior_ts = (int(timeslot) - 1) % 145
+	penult_ts  = (int(timeslot) - 2) % 145
 
+
+	key_next = (district, day_of_year, str(next_ts))
+	key_prior = (district, day_of_year, str(prior_ts))
+	key_penult = (district, day_of_year, str(penult_ts))
+
+
+
+	# check if last timeslot in day
+	if int(timeslot) == 144:
+		key_next = (district, str(int(day_of_year) + 1), "1")
+
+	if int(timeslot) == 1:
+		key_prior = (district, str(int(day_of_year) - 1), "144")
+		key_penult = (district, str(int(day_of_year) - 1), "143")
+
+	if int(timeslot) == 2:
+		key_penult = (district, str(int(day_of_year) - 1), "144")
 
 	# get targets (next_demand, next_supply)
-	key = (district, day_of_year, next_ts)
-	if key in gap_dict:
-		demand_next, supply_next = gap_dict[key]
+	# bypass data if target does not exist
+	if key_next in gap_dict:
+		demand_next, supply_next, into_dist, out_of_dist, day_of_week = gap_dict[key_next]
 		train[k]["demand_predict"] = demand_next
 		train[k]["supply_predict"] = supply_next
+		train[k]["gap_predict"] = demand_next - supply_next
+	else:
+		train[k]["demand_predict"] = None
+		train[k]["supply_predict"] = None
+		train[k]["gap_predict"] = None
+
 
 #	get data from prior timeslot
-	key = (district, day_of_year, prior_ts)
-	if key in gap_dict:
-		demand, supply, into_dist, out_of_dist, day_of_week = gap_dict[key]
+	if key_prior in gap_dict:
+		demand, supply, into_dist, out_of_dist, day_of_week = gap_dict[key_prior]
 		train[k]["demand_t1"] = demand
 		train[k]["supply_t1"] = supply
 		train[k]["into_district_t1"] = into_dist
-		train[k]["out_of_district_t1"] = out_of_district
+		train[k]["out_of_district_t1"] = out_of_dist
+		train[k]["gap_t1"] = demand - supply
+	else:
+		train[k]["demand_t1"] = None
+		train[k]["supply_t1"] = None
+		train[k]["into_district_t1"] = None
+		train[k]["out_of_district_t1"] = None
+		train[k]["gap_t1"] = None
 
 #	get data from penultimate timeslot
-	key = (district, day_of_year, penult_ts)
-	if key in gap_dict:
-		demand, supply, into_dist, out_of_dist, day_of_week = gap_dict[key]
+	if key_penult in gap_dict:
+		demand, supply, into_dist, out_of_dist, day_of_week = gap_dict[key_penult]
 		train[k]["demand_t2"] = demand
 		train[k]["supply_t2"] = supply
 		train[k]["into_district_t2"] = into_dist
-		train[k]["out_of_district_t2"] = out_of_district
+		train[k]["out_of_district_t2"] = out_of_dist
+	else:
+		train[k]["demand_t2"] = None
+		train[k]["supply_t2"] = None
+		train[k]["into_district_t2"] = None
+		train[k]["out_of_district_t2"] = None
 
 #	get traffic if it exists for this timeslot
 	key = str(district) + ":" + str(day_of_year) + ":" + str(timeslot)
@@ -117,6 +150,12 @@ for k in gap_dict:
 		train[k]["congestion2"] = congestion2
 		train[k]["congestion3"] = congestion3
 		train[k]["congestion4"] = congestion4
+	else:
+		train[k]["congestion1"] = None
+		train[k]["congestion2"] = None
+		train[k]["congestion3"] = None
+		train[k]["congestion4"] = None
+
 
 #	get weather if it exists for this timeslot
 	key = str(day_of_year) + ":" + str(timeslot)
@@ -125,9 +164,13 @@ for k in gap_dict:
 		train[k]["weather"] = weather
 		train[k]["temperature"] = temperature
 		train[k]["pollution"] = pollution
+	else:
+		train[k]["weather"] = None
+		train[k]["temperature"] = None
+		train[k]["pollution"] = None
+	record_count += 1
 
-	count += 1
-
+print "records processed: %d missing_label_cnt: %d" % (record_count, missing_label_cnt) 
 pickle.dump(train, open("train_dict", "w"))
 
 

@@ -16,6 +16,14 @@
 """    
 
 
+def mean_squared_error(reg, features, labels):
+    # calculate least squares error
+    import numpy as np
+    predict = reg.predict(features)
+    label = np.array(labels)
+    return np.sum( (label-predict)**2) / len(label)
+
+
 import sys
 import pickle
 
@@ -24,7 +32,7 @@ dictionary = pickle.load( open("train_dict", "r") )
 
 ### list the features you want to look at--first item in the 
 ### list will be the "target" feature
-features_list = ["supply_predict", "supply"]
+features_list = ["gap_predict", "demand", "supply"]
 #features_list = ["demand_predict", "demand", "supply", "demand_t1", "supply_t1", "demand_t2", "supply_t2"]
 data = featureFormat( dictionary, features_list, remove_all_zeroes=False)
 target, features = targetFeatureSplit( data )
@@ -46,6 +54,10 @@ feature_train, feature_test = scale(feature_train, feature_test)
 from sklearn import linear_model
 reg = linear_model.LinearRegression()
 reg.fit(feature_train, target_train)
+
+# calculate least squares error
+print "least squares error %f" % mean_squared_error(reg, feature_test, target_test)
+
 print reg.coef_, reg.intercept_
 print "training score", reg.score(feature_train, target_train)
 print "test score", reg.score(feature_test, target_test)
