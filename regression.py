@@ -13,6 +13,12 @@
     
     Try two separate models for supply and demand
     Look into combining into two labels, since supply/demand are correlated
+
+    Regression Models:
+        - Linear Regression
+        - Lasso Regression
+        - Decision Tree Regression
+        - SV Regression
 """    
 
 
@@ -23,38 +29,91 @@ def mean_squared_error(reg, features, labels):
     label = np.array(labels)
     return np.sum( (label-predict)**2) / len(label)
 
+def get_model(features_list, dictionary):
+    """
+    performs model training and model fitting, 
+    return the model without testing
+    """
+
+    from feature_format import featureFormat, targetFeatureSplit
+
+    ### list the features you want to look at--first item in the 
+    ### list will be the "target" feature
+    ### features_list = ["gap_predict", "demand", "supply"]
+    #features_list = ["demand_predict", "demand", "supply", "demand_t1", "supply_t1", "demand_t2", "supply_t2"]
+    data = featureFormat( dictionary, features_list, remove_all_zeroes=False)
+    target, features = targetFeatureSplit( data )
+
+    ### training-testing split needed in regression, just like classification
+    from sklearn.cross_validation import train_test_split
+    feature_train, feature_test, target_train, target_test = train_test_split(features, target, test_size=0.2)
+    train_color = "b"
+    test_color = "r"
+
+
+ #   from feature_scaling import scale
+ #   feature_train, feature_test = scale(feature_train, feature_test)
+    ### Your regression goes here!
+    ### Please name it reg, so that the plotting code below picks it up and 
+    ### plots it correctly. Don't forget to change the test_color above from "b" to
+    ### "r" to differentiate training points from test points.
+    """
+    from sklearn import linear_model
+
+    model = linear_model.LinearRegression()
+    model.fit(feature_train, target_train)
+
+    model = linear_model.Lasso()
+    model.fit(feature_train, target_train)
+    """
+
+    from sklearn.tree import DecisionTreeRegressor
+    model = DecisionTreeRegressor()
+    model.fit(feature_train, target_train)
+
+
+    print "least squares error %f" % mean_squared_error(model, feature_test, target_test)
+ #   print model.coef_, model.intercept_
+    print "training score", model.score(feature_train, target_train)
+    print "test score", model.score(feature_test, target_test)
+    print model.predict(33)
+    return model
+
 
 import sys
 import pickle
+import numpy as np
 
-from feature_format import featureFormat, targetFeatureSplit
 dictionary = pickle.load( open("train_dict", "r") )
-
-### list the features you want to look at--first item in the 
-### list will be the "target" feature
+features_list_demand = ["demand_predict", "demand"]
+features_list_supply = ["supply_predict", "supply"]
+# train supply and demand models
+demand_model = get_model(features_list_demand, dictionary)
+supply_model = get_model(features_list_supply, dictionary)
+# test models
+# create test data
+from feature_format import featureFormat, targetFeatureSplit
 features_list = ["gap_predict", "demand", "supply"]
-#features_list = ["demand_predict", "demand", "supply", "demand_t1", "supply_t1", "demand_t2", "supply_t2"]
+# create numpy array of features
 data = featureFormat( dictionary, features_list, remove_all_zeroes=False)
-target, features = targetFeatureSplit( data )
+#target, features = targetFeatureSplit( data )
 
-### training-testing split needed in regression, just like classification
-from sklearn.cross_validation import train_test_split
-feature_train, feature_test, target_train, target_test = train_test_split(features, target, test_size=0.2)
-train_color = "b"
-test_color = "r"
+#randomly select 20% of data for testing
+np.random.shuffle(data)
+n = len(data) / 5
+test_data = data[:n+1]
+
+demand_predictions = np.array(demand_model.predict(test_data[:,1].reshape(-1,1)))
+supply_predictions = np.array(supply_model.predict(test_data[:,2].reshape(-1,1)))
+gap_predictions = demand_predictions - supply_predictions
+for i in range(50):
+    print gap_predictions[i], test_data[:,0][i]
+# get mean-squared-error
+MSE = np.sum( (test_data[:,0] - gap_predictions)**2 )/ len(test_data)
+print "mean-squared-error: %f" % MSE
 
 
-from feature_scaling import scale
-feature_train, feature_test = scale(feature_train, feature_test)
-### Your regression goes here!
-### Please name it reg, so that the plotting code below picks it up and 
-### plots it correctly. Don't forget to change the test_color above from "b" to
-### "r" to differentiate training points from test points.
-
-from sklearn import linear_model
-reg = linear_model.LinearRegression()
-reg.fit(feature_train, target_train)
-
+"""
 # calculate least squares error
 print "least squares error %f" % mean_squared_error(reg, feature_test, target_test)
 
@@ -63,7 +122,7 @@ print "training score", reg.score(feature_train, target_train)
 print "test score", reg.score(feature_test, target_test)
 
 
-"""
+
 ### draw the scatterplot, with color-coded training and testing points
 import matplotlib.pyplot as plt
 for feature, target in zip(feature_test, target_test):
