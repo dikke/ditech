@@ -20,7 +20,10 @@
         - Decision Tree Regression
         - SV Regression
 """    
-
+import sys
+import pickle
+import numpy as np
+import datetime
 
 def mean_squared_error(reg, features, labels):
     # calculate least squares error
@@ -80,37 +83,113 @@ def get_model(features_list, dictionary):
     return model
 
 
-import sys
-import pickle
-import numpy as np
+def regression(dictionary):
 
-dictionary = pickle.load( open("train_dict", "r") )
-features_list_demand = ["demand_predict", "demand"]
-features_list_supply = ["supply_predict", "supply"]
-# train supply and demand models
-demand_model = get_model(features_list_demand, dictionary)
-supply_model = get_model(features_list_supply, dictionary)
-# test models
-# create test data
-from feature_format import featureFormat, targetFeatureSplit
-features_list = ["gap_predict", "demand", "supply"]
-# create numpy array of features
-data = featureFormat( dictionary, features_list, remove_all_zeroes=False)
-#target, features = targetFeatureSplit( data )
+#    dictionary = pickle.load( open(dic, "r") )
+    features_list_demand = ["demand_predict", "demand"]
+    features_list_supply = ["supply_predict", "supply"]
+    # train supply and demand models
+    demand_model = get_model(features_list_demand, dictionary)
+    supply_model = get_model(features_list_supply, dictionary)
+    # test models
+    # create test data
+    from feature_format import featureFormat, targetFeatureSplit
+    features_list = ["gap_predict", "demand", "supply"]
+    # create numpy array of features
+    data = featureFormat( dictionary, features_list, remove_all_zeroes=False)
+    #target, features = targetFeatureSplit( data )
 
-#randomly select 20% of data for testing
-np.random.shuffle(data)
-n = len(data) / 5
-test_data = data[:n+1]
+    #randomly select 20% of data for testing
+    np.random.shuffle(data)
+    n = len(data) / 5
+    test_data = data[:n+1]
 
-demand_predictions = np.array(demand_model.predict(test_data[:,1].reshape(-1,1)))
-supply_predictions = np.array(supply_model.predict(test_data[:,2].reshape(-1,1)))
-gap_predictions = demand_predictions - supply_predictions
-for i in range(50):
-    print gap_predictions[i], test_data[:,0][i]
-# get mean-squared-error
-MSE = np.sum( (test_data[:,0] - gap_predictions)**2 )/ len(test_data)
-print "mean-squared-error: %f" % MSE
+    demand_predictions = np.array(demand_model.predict(test_data[:,1].reshape(-1,1)))
+    supply_predictions = np.array(supply_model.predict(test_data[:,2].reshape(-1,1)))
+    gap_predictions = demand_predictions - supply_predictions
+    for i in range(50):
+        print gap_predictions[i], test_data[:,0][i]
+    # get mean-squared-error
+    MSE = np.sum( (test_data[:,0] - gap_predictions)**2 )/ len(test_data)
+    print "mean-squared-error: %f" % MSE
+    return demand_model, supply_model
+
+def day_of_year(date):
+    yy = int(x[0])
+    mm = int(x[1])
+    dd = int(x[2]) 
+    return datetime.datetime(yy,mm,dd).toordinal() - datetime.datetime(yy,01,01).toordinal()
+
+def get_prior_date(date):
+    x = date.split("-")
+    yy = int(x[0])
+    mm = int(x[1])
+    dd = int(x[2])
+    prior_day_ordinal = datetime.datetime(yy,mm,dd).toordinal() - 1
+    prior_date = datetime.datetime.fromordinal(prior_day_ordinal)
+    return prior_date.strftime("%Y-%m-%d")
+
+def create_predictions_file(to_predict_list, predict_dict, demand_model, supply_model):
+    print "creating predictions file"
+    fout = open("ditech_predictions.csv", "w")
+
+    for line in to_predict_list:
+        fields = line.split("-")
+        date = line[:10]
+        timeslot_to_predict = fields[3].split("\n")[0]
+        #find prior timeslot and get demand, supply
+        timeslot_prior = int(timeslot_to_predict) - 1
+        # if prediction is for fist timeslot, then get last timeslot of prior day
+        if timeslot_prior == 0:
+            timeslot_prior = 144
+            date = get_prior_day(date)
+
+        #get demand and supply from prior timeslot for all districts
+        if not date in predict_dict:
+            print "cannot find date: %s" % date 
+            continue
+
+        ts = str(timeslot_prior)
+        if not ts in predict_dict[date]:
+            print "cannot find timeslot %s for date %d" % (ts, date)
+
+        for district in predict_dict[date][ts]:
+            demand, supply = predict_dict[date][ts][district]
+            demand_predict = demand_model.predict(demand)
+            supply_predict = supply_model.predict(supply)
+            gap_predict = demand_predict - supply_predict
+            if gap_predict < 0:
+                gap_predict = 0
+            #format prediction string
+            sep = "-"
+            field2 = sep.join([date, timeslot_to_predict])
+            sep = ","
+            str_gap = '%.1f' % gap_predict
+            str_out = sep.join([district, field2, str_gap])
+            fout.writelines(str_out)
+            fout.write("\n")
+    fout.close()
+
+
+if __name__ == "__main__":
+    train_dict = pickle.load(open("train_dict", "r"))
+    # perform training, derive demand and supply models
+    demand_model, supply_model = regression(train_dict)
+    # verify if predictions file should be created
+    if len(sys.argv) > 1:
+        sys.exit()
+    #get timeslots that need to have predictions
+    predict_dict_file = "test_predict_dict"
+    predict_dict = pickle.load(open(predict_dict_file, 'r'))
+    f = open("read_me_1.txt", "r")
+    f.readline()    #first line is header
+    to_predict_list = [line for line in f.readlines()]
+    f.close
+    create_predictions_file(to_predict_list, predict_dict, demand_model, supply_model)
+
+
+
+
 
 
 """
